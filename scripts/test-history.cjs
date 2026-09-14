@@ -1,0 +1,78 @@
+const { _electron: electron } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = path.resolve(process.env.LUMEN_TEST_DIR || path.join(root, 'test-results'));
+fs.mkdirSync(out, { recursive: true });
+const data = fs.mkdtempSync(path.join(out, 'history-app-'));
+const channelId = 'UCaaaaaaaaaaaaaaaaaaaaaa';
+fs.writeFileSync(path.join(data, 'library.json'), JSON.stringify({ library: [{ id: channelId, title: 'Canal de teste', profileUpdatedAt: Date.now(), bannerUpdatedAt: Date.now() }], settings: { theme: 'cyberpunk', visualizerEnabled: false } }));
+const env = { ...process.env, LUMEN_DATA_DIR: data }; delete env.ELECTRON_RUN_AS_NODE;
+let app, page;
+async function launch() {
+  app = await electron.launch({ args: [root, '--test'], env }); page = await app.firstWindow();
+  await page.waitForFunction(() => document.body.dataset.ready === 'true');
+}
+(async () => { try {
+  await launch();
+  assert.equal(await page.locator('#like-video').isDisabled(), true);
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  const origin = (await page.evaluate(() => window.lumen.init())).playerOrigin;
+  // Control playback events while exercising the real isolated iframe, IPC and storage.
+  await page.route(`${origin}/player.js`, route => route.fulfill({ contentType: 'application/javascript', body: `
+    let host;
+    window.testEmit = (type, value, session = location.search) => parent.postMessage({ source: 'lumen-player', session, type, value }, host);
+    addEventListener('message', e => { if (e.source !== parent) return; host = e.origin; if (e.data.type === 'load') { testEmit('video', { id: e.data.id, title: 'Título inicial', author: 'Canal' }); testEmit('state', 5); } });
+  ` }));
+  await app.evaluate((_, id) => { globalThis.fetch = async input => new Response(String(input).includes('/feeds/') ? `<feed><yt:channelId>${id}</yt:channelId><title>Canal</title><entry><yt:videoId>M7lc1UVf-VE</yt:videoId><yt:channelId>${id}</yt:channelId><title>Vídeo de teste</title></entry></feed>` : `var ytInitialData = ${JSON.stringify({ metadata: { channelMetadataRenderer: { externalId: id, title: 'Canal' } } })};`); }, channelId);
+  await page.locator('#history-button').click(); assert.equal(await page.locator('#history-empty').isVisible(), true);
+  await page.keyboard.press('Escape'); await page.locator('#history-dialog').waitFor({ state: 'hidden' });
+  await page.locator('#library-button').click(); await page.locator('.card-play').click(); await page.locator('.recommendation-card').first().click();
+  await page.waitForFunction(() => document.querySelector('#video-label').textContent.includes('PRONTO'));
+  const frame = page.frames().find(f => f.url().includes('/player.html'));
+  const emit = (type, value) => frame.evaluate(({ type, value }) => testEmit(type, value), { type, value });
+  await emit('error', 'Indisponível'); assert.equal((await page.evaluate(() => window.lumen.init())).history.length, 0);
+  await frame.evaluate(() => testEmit('state', 1, '?stale'));
+  assert.equal((await page.evaluate(() => window.lumen.init())).history.length, 0);
+  await emit('state', 1); await page.waitForFunction(() => document.querySelectorAll('.history-entry').length === 1);
+  await page.locator('#like-video').click();
+  await page.waitForFunction(() => document.querySelector('#like-video').getAttribute('aria-pressed') === 'true');
+  await page.locator('#like-video').click();
+  await page.waitForFunction(() => document.querySelector('#like-video').getAttribute('aria-pressed') === 'false');
+  await page.locator('#like-video').click();
+  await page.waitForFunction(() => document.querySelector('#like-video').getAttribute('aria-pressed') === 'true');
+  await page.locator('#history-button').click(); await page.locator('.history-entry').waitFor();
+  assert.equal(await page.locator('.history-liked').count(), 1);
+  await emit('video', { id: 'M7lc1UVf-VE', title: 'Título confirmado pelo YouTube', author: 'Canal' });
+  await page.locator('.history-entry strong').filter({ hasText: 'Título confirmado pelo YouTube' }).waitFor();
+  const first = (await page.evaluate(() => window.lumen.init())).history[0];
+  await emit('state', 2); await emit('state', 1);
+  assert.equal((await page.evaluate(() => window.lumen.init())).history[0].watchedAt, first.watchedAt);
+  await emit('video', { id: 'CBzLIKfWpdg', title: 'Próximo vídeo', author: 'Canal' });
+  assert.equal(await page.locator('#like-video').getAttribute('aria-pressed'), 'false');
+  assert.equal((await page.evaluate(() => window.lumen.init())).history.length, 1);
+  await emit('state', 1); await page.waitForFunction(() => document.querySelectorAll('.history-entry').length === 2);
+  assert.equal(await page.locator('.history-entry strong').first().innerText(), 'Próximo vídeo');
+  assert.equal(await page.locator('.history-entry img').first().getAttribute('src'), 'https://i.ytimg.com/vi/CBzLIKfWpdg/mqdefault.jpg');
+  await page.locator('#history-dialog').evaluate(async n => Promise.all(n.getAnimations().map(a => a.finished)));
+  await page.screenshot({ path: path.join(out, 'history.png') });
+  await page.keyboard.press('Escape'); await page.locator('#history-dialog').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#history-button').getAttribute('aria-expanded'), 'false');
+  assert.deepEqual(errors, []);
+  await app.close(); await launch();
+  await page.locator('#history-button').click(); assert.equal(await page.locator('.history-entry').count(), 2);
+  assert.equal(await page.locator('.history-entry[data-id="M7lc1UVf-VE"] .history-liked').innerText(), 'Curtido');
+  await page.keyboard.press('Escape'); await page.locator('#history-dialog').waitFor({ state: 'hidden' });
+  // Fill beyond the limit through the real storage bridge, then reload the UI.
+  await page.evaluate(async () => { for (let i = 0; i < 103; i++) await window.lumen.recordHistory({ id: `video${String(i).padStart(6, '0')}`, title: `Vídeo ${i}` }); });
+  await page.reload(); await page.waitForFunction(() => document.body.dataset.ready === 'true');
+  await page.locator('#history-button').click(); assert.equal(await page.locator('.history-entry').count(), 100);
+  assert.equal(await page.locator('.history-entry strong').first().innerText(), 'Vídeo 102');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 620));
+  await page.waitForFunction(() => innerWidth === 900);
+  await page.locator('.history-entry').last().scrollIntoViewIfNeeded();
+  assert.equal(await page.locator('#history-list').evaluate(n => n.scrollWidth <= n.clientWidth), true);
+  await page.screenshot({ path: path.join(out, 'history-small.png') });
+  console.log('PASS history playback gating, errors/stale sessions ignored, live modal updates, metadata, pause/resume deduplication, restart persistence and scrollable 100-video limit.');
+} catch (error) { console.error(error); process.exitCode = 1; } finally { await app?.close(); } })();

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="cyberpunk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lúmen Player</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/themes.css">
+  <script src="/visualizer.js" defer></script>
+  <script src="/space-background.js" defer></script>
+  <script src="/radar-background.js" defer></script>
+  <script src="/cyberpunk-background.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand"><span class="brand-mark">▷</span><strong>módulo player</strong></div>
+    <div class="titlebar-visualizer" title="Visualizador de áudio"><canvas id="audio-visualizer" role="img" aria-label="Visualizador de áudio: Barras" data-state="idle"></canvas></div>
+    <div class="window-actions">
+      <button data-window="minimize" aria-label="Minimizar">—</button>
+      <button data-window="maximize" aria-label="Maximizar ou restaurar">□</button>
+      <button data-window="close" class="close-window" aria-label="Fechar">×</button>
+    </div>
+  </header>
+  <div class="app-body">
+    <div id="cyberpunk-background" aria-hidden="true"></div>
+    <div id="space-background" aria-hidden="true"></div>
+    <span id="space-status" role="status" hidden></span>
+    <div id="radar-background" hidden><canvas aria-hidden="true"></canvas><span id="radar-status" role="status">OpenSky · Conectando…</span></div>
+    <main class="main">
+      <div class="workspace-toolbar">
+        <section id="recommendations" class="recommendations" aria-label="Vídeos do mesmo canal">
+          <button id="recommendations-prev" class="carousel-arrow" aria-label="Vídeos recomendados anteriores" disabled>‹</button>
+          <div id="recommendations-track" class="recommendations-track" tabindex="0" aria-label="Carrossel de vídeos do mesmo canal"></div>
+          <div id="recommendations-status" class="recommendations-status" role="status">Selecione um canal na biblioteca para carregar os vídeos.</div>
+          <button id="recommendations-retry" class="small-button" hidden>Tentar novamente</button>
+          <button id="recommendations-next" class="carousel-arrow" aria-label="Próximos vídeos recomendados" disabled>›</button>
+        </section>
+      </div>
+      <section id="stage" class="stage">
+        <section class="video-panel" aria-label="Player do YouTube">
+          <div class="panel-heading"><div><span class="live-dot"></span><span id="video-label">PLAYER / YOUTUBE</span></div><button id="like-video" class="icon-button" aria-label="Curtir vídeo" title="Reproduza um vídeo para curtir" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10l4-7c.4-.7 1.4-.4 1.4.5V9H20a2 2 0 0 1 1.9 2.6l-2.2 7A2 2 0 0 1 17.8 20H8zM3 10h5v10H3z"/></svg></button></div>
+          <div class="video-surface">
+            <div id="video-empty" class="video-empty">
+              <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div>
+              <div class="video-empty-content"><span class="play-emblem" aria-hidden="true">▷</span><span class="eyebrow">UM PLAY NO SEU DIA</span><h3>Seus vídeos.<br>Uma nova atmosfera.</h3><p>Selecione um canal na biblioteca.<br>Depois, escolha um vídeo no carrossel acima.</p><button id="stage-add" class="secondary">Abrir biblioteca de canais</button></div>
+              <span class="surface-coordinate">LÚMEN / VIDEO SPACE</span>
+            </div>
+            <iframe id="player" title="Reprodutor de vídeos do YouTube" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" hidden></iframe>
+            <div id="video-tint" data-color="none" aria-hidden="true"></div>
+          </div>
+          <div class="video-caption"><div><strong id="now-title">Nenhum vídeo selecionado</strong><span id="now-author">Sua biblioteca está a um clique.</span></div><div class="video-actions">
+            <button id="library-button" class="icon-button" aria-label="Biblioteca" title="Biblioteca" aria-haspopup="dialog" aria-expanded="false" aria-controls="library-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16 5l3-1 4 15-3 1z"/></svg></button>
+            <button id="settings-button" class="icon-button" aria-label="Configurações" title="Configurações" aria-haspopup="dialog" aria-controls="settings-dialog"><span aria-hidden="true">⚙</span></button>
+            <button id="history-button" class="icon-button" aria-label="Histórico" title="Histórico" aria-haspopup="dialog" aria-expanded="false" aria-controls="history-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7M12 7v5l3 2"/></svg></button>
+          </div></div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button id="notice-close" aria-label="Fechar aviso">×</button></div>
+  <dialog id="library-dialog" aria-labelledby="library-title">
+    <div class="dialog-top"><div class="library-heading"><h2 id="library-title">Biblioteca</h2><span id="count" class="count">0</span></div><button data-close="library-dialog" class="icon-button" aria-label="Fechar biblioteca">×</button></div>
+    <p class="library-intro">Selecione um canal para carregar seus vídeos no carrossel.</p>
+    <div id="migration-info" class="migration-info" hidden><p id="migration-text" role="status"></p><button id="migration-retry" class="small-button" hidden>Tentar converter novamente</button></div>
+    <div class="library-tools">
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar na biblioteca" aria-label="Buscar na biblioteca"></label>
+      <button id="add-video" class="primary"><span>＋</span> Adicionar canal <kbd>Ctrl K</kbd></button>
+    </div>
+    <div class="collection-label"><span>CANAIS SALVOS</span><span id="result-count"></span></div>
+    <div id="library" class="library" aria-label="Canais salvos"></div>
+    <div id="library-empty" class="library-empty">
+      <div class="stack-icon" aria-hidden="true"><span>▷</span></div>
+      <h2>Sua próxima inspiração<br>começa com um link.</h2>
+      <p>Guarde seus canais favoritos de<br>música, aulas e inspiração.</p>
+      <button id="first-video" class="text-button">Adicionar primeiro canal <span>↗</span></button>
+    </div>
+    <div id="no-results" class="no-results" hidden>Nenhum canal encontrado.</div>
+    <div class="library-footer"><button data-close="library-dialog" class="primary">Concluído</button></div>
+  </dialog>
+  <dialog id="video-dialog">
+    <form id="video-form">
+      <div class="dialog-top"><span class="eyebrow">BIBLIOTECA / NOVO CANAL</span><button type="button" data-close="video-dialog" class="icon-button" aria-label="Fechar">×</button></div>
+      <h2>Seu próximo canal favorito.</h2><p>Cole o link de um canal do YouTube para salvá-lo na biblioteca.</p>
+      <label for="video-url">Link do canal</label><input id="video-url" type="text" placeholder="https://www.youtube.com/@nome-do-canal" maxlength="2048" required autocomplete="off">
+      <p class="form-note">Aceita @nome, /channel/ID, /c/nome e /user/nome. O nome do canal é preenchido automaticamente.</p><p id="form-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button type="button" class="quiet-button" data-close="video-dialog">Cancelar</button><button id="save-video" class="primary" type="submit">Salvar na biblioteca <span>↗</span></button></div>
+    </form>
+  </dialog>
+  <dialog id="history-dialog" aria-labelledby="history-title">
+    <div class="dialog-top"><h2 id="history-title">Histórico</h2><button data-close="history-dialog" class="icon-button" aria-label="Fechar histórico">×</button></div>
+    <p class="history-intro">Seus últimos 100 vídeos assistidos, do mais recente ao mais antigo.</p>
+    <ol id="history-list" aria-label="Vídeos assistidos"></ol>
+    <p id="history-empty">Seu histórico começa quando um vídeo é reproduzido.</p>
+    <div class="dialog-actions"><button data-close="history-dialog" class="primary">Concluído</button></div>
+  </dialog>
+  <dialog id="confirm-dialog"><div class="dialog-top"><span class="eyebrow">CONFIRMAR AÇÃO</span><button type="button" data-close="confirm-dialog" class="icon-button" aria-label="Fechar">×</button></div><h2 id="confirm-title"></h2><p id="confirm-text"></p><div class="dialog-actions"><button id="confirm-cancel" class="quiet-button">Cancelar</button><button id="confirm-accept" class="primary">Confirmar</button></div></dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <div class="dialog-top"><h2 id="settings-title">Configurações</h2><button data-close="settings-dialog" class="icon-button" aria-label="Fechar configurações">×</button></div>
+    <p class="settings-intro">Os ajustes são aplicados e salvos automaticamente.</p>
+    <div class="theme-setting"><label for="theme">Tema da interface</label><select id="theme"><option value="cyberpunk">Cyberpunk</option><option value="military">Radar</option><option value="space">Estação Espacial</option></select></div>
+    <div class="theme-setting"><label for="video-tint-color">Cor sobre o vídeo</label><select id="video-tint-color" title="Camada suave com 16% de opacidade, apenas sobre o vídeo"><option value="none">Sem cor</option><option value="yellow">Amarelo</option><option value="blue">Azul</option><option value="red">Vermelho</option><option value="pink">Rosa</option></select></div>
+    <section class="visualizer-settings" aria-labelledby="visualizer-title">
+      <div class="setting-label"><label id="visualizer-title" for="visualizer-enabled">Visualizador de áudio</label><label class="playback-toggle"><input id="visualizer-enabled" type="checkbox" checked aria-label="Ativar visualizador de áudio"></label></div>
+      <fieldset class="visualizer-options"><legend class="sr-only">Estilo do visualizador</legend>
+        <label><input type="radio" name="visualizer-style" value="bars" checked><span class="visualizer-choice"><span class="visualizer-symbol" aria-hidden="true"><svg viewBox="0 0 44 26"><path d="M5 18V9M13 23V4M22 25V2M31 20V7M39 16v-5"/></svg></span><strong>Barras</strong><small>Espectro de frequências</small></span></label>
+        <label><input type="radio" name="visualizer-style" value="wave"><span class="visualizer-choice"><span class="visualizer-symbol" aria-hidden="true">∿∿∿</span><strong>Ondas</strong><small>Forma do som</small></span></label>
+        <label><input type="radio" name="visualizer-style" value="aurora"><span class="visualizer-choice"><span class="visualizer-symbol" aria-hidden="true"><svg viewBox="0 0 44 26"><path d="M2 9Q12 0 22 9T42 9M2 14Q12 5 22 14T42 14M2 19Q12 10 22 19T42 19"/></svg></span><strong>Aurora</strong><small>Faixas de luz fluidas</small></span></label>
+        <label><input type="radio" name="visualizer-style" value="helix"><span class="visualizer-choice"><span class="visualizer-symbol" aria-hidden="true"><svg viewBox="0 0 44 26"><path d="M2 5C15 5 29 21 42 21M2 21C15 21 29 5 42 5M8 6v14M16 10v6M28 10v6M36 6v14"/></svg></span><strong>DNA</strong><small>Hélices no ritmo do som</small></span></label>
+        <label><input type="radio" name="visualizer-style" value="constellation"><span class="visualizer-choice"><span class="visualizer-symbol" aria-hidden="true"><svg viewBox="0 0 44 26"><path d="m5 19 11-13 12 14 11-13M5 19l23 1M16 6l23 1"/><circle cx="5" cy="19" r="2"/><circle cx="16" cy="6" r="2"/><circle cx="28" cy="20" r="2"/><circle cx="39" cy="7" r="2"/></svg></span><strong>Constelação</strong><small>Estrelas conectadas</small></span></label>
+        <label><input type="radio" name="visualizer-style" value="matrix"><span class="visualizer-choice"><span class="visualizer-symbol" aria-hidden="true"><svg viewBox="0 0 44 26"><path d="M4 21h6m4 0h6m4 0h6m4 0h6M4 14h6m4 0h6m4 0h6m4 0h6M14 7h6m4 0h6M24 1h6"/></svg></span><strong>Matriz LED</strong><small>Equalizador em blocos</small></span></label>
+      </fieldset>
+      <p id="visualizer-status" role="status">Selecione um vídeo para começar.</p>
+      <button id="visualizer-retry" class="quiet-button" hidden>Tentar ativar novamente</button>
+    </section>
+    <div class="setting-row">
+      <div><label for="keep-playing">Continuar ao minimizar</label><p id="keep-playing-description">Mantém a reprodução quando a janela é minimizada.</p></div>
+      <label class="playback-toggle"><input id="keep-playing" type="checkbox" checked aria-label="Continuar ao minimizar" aria-describedby="keep-playing-description"></label>
+    </div>
+    <div class="setting-transparency">
+      <div class="setting-label"><label for="transparency">Transparência</label><output id="transparency-value" for="transparency">0%</output></div>
+      <input id="transparency" type="range" min="0" max="65" value="0" step="1" aria-describedby="transparency-description">
+      <div class="setting-range-caption"><span>Opaco</span><span>Transparente</span></div>
+      <p id="transparency-description">Aplica-se à janela inteira, incluindo vídeo e controles.</p>
+    </div>
+    <div class="dialog-actions"><button id="reset-opacity" class="quiet-button" title="Restaurar janela opaca" aria-label="Restaurar janela opaca">↺ Restaurar 0%</button><button data-close="settings-dialog" class="primary">Concluído</button></div>
+  </dialog>
+</body>
+</html>

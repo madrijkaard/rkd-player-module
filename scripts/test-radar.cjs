@@ -1,0 +1,43 @@
+const { _electron: electron } = require('playwright');
+const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '..'), out = path.resolve(process.env.LUMEN_TEST_DIR || path.join(root, 'test-results'));
+fs.mkdirSync(out, { recursive: true }); const data = fs.mkdtempSync(path.join(out, 'radar-'));
+fs.writeFileSync(path.join(data, 'library.json'), JSON.stringify({ settings: { theme: 'military', visualizerEnabled: false } }));
+const env = { ...process.env, LUMEN_DATA_DIR: data, NODE_USE_SYSTEM_CA: '1' }; delete env.ELECTRON_RUN_AS_NODE;
+(async () => { let app; try {
+  app = await electron.launch({ args: [root, '--test'], env }); const page = await app.firstWindow();
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.waitForFunction(() => document.body.dataset.ready === 'true');
+  await page.locator('#radar-background[data-state="live"]').waitFor({ timeout: 80000 });
+  const snapshot = await page.evaluate(() => window.lumen.radar());
+  assert.equal(snapshot.status, 'live'); assert.ok(snapshot.timestamp > Date.now() - 120000);
+  assert.ok(snapshot.flights.length > 0, 'Expected real aircraft in the São Paulo / Rio region');
+  await page.screenshot({ path: path.join(out, 'radar-main.png') });
+  await page.evaluate(() => { window.originalRadarCanvas = document.querySelector('#radar-background canvas'); });
+  for (const [button, dialog] of [['#settings-button', '#settings-dialog'], ['#library-button', '#library-dialog'], ['#history-button', '#history-dialog']]) {
+    await page.locator(button).click(); await page.locator(`${dialog} #radar-background`).waitFor();
+    await page.locator(dialog).evaluate(async n => Promise.all(n.getAnimations().map(a => a.finished)));
+    assert.equal(await page.evaluate(() => originalRadarCanvas === document.querySelector('#radar-background canvas')), true);
+    if (dialog === '#settings-dialog') await page.screenshot({ path: path.join(out, 'radar-settings.png') });
+    await page.keyboard.press('Escape'); await page.locator(dialog).waitFor({ state: 'hidden' });
+  }
+  await page.keyboard.press('Control+k'); await page.locator('#video-dialog #radar-background').waitFor();
+  await page.keyboard.press('Escape'); await page.locator('#video-dialog').waitFor({ state: 'hidden' });
+  await page.waitForFunction(timestamp => Number(document.querySelector('#radar-background').dataset.updatedAt) > timestamp, snapshot.timestamp, { timeout: 80000 });
+  assert.equal((await page.evaluate(() => window.lumen.radar())).status, 'live');
+  await page.locator('#settings-button').click(); await page.locator('#theme').selectOption('cyberpunk');
+  await page.locator('#radar-background').waitFor({ state: 'hidden' });
+  assert.equal((await page.evaluate(() => window.lumen.radar())).status, 'inactive');
+  await page.locator('#theme').selectOption('military'); await page.locator('#settings-dialog #radar-background').waitFor();
+  await page.keyboard.press('Escape'); await page.locator('#settings-dialog').waitFor({ state: 'hidden' });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
+  await page.locator('#radar-background').waitFor({ state: 'hidden' });
+  assert.equal((await page.evaluate(() => window.lumen.radar())).status, 'inactive');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].restore());
+  await page.locator('#radar-background').waitFor();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 620));
+  await page.waitForFunction(() => innerWidth === 900);
+  await page.screenshot({ path: path.join(out, 'radar-small.png') });
+  assert.deepEqual(errors, []);
+  console.log(`PASS ${snapshot.flights.length} live OpenSky aircraft, automatic next update, shared canvas in all modals, theme isolation, minimize/restore and resize.`);
+} catch (e) { console.error(e); process.exitCode = 1; } finally { await app?.close(); } })();
