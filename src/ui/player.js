@@ -19,7 +19,7 @@ function execute(command) {
   else if (command.type === 'stop') { pending = null; player.stopVideo(); }
 }
 window.addEventListener('message', (event) => {
-  if (event.source !== parent || !/^http:\/\/127\.0\.0\.1:\d+$/.test(event.origin) || event.data?.source !== 'lumen-app') return;
+  if (event.source !== parent || (event.origin !== location.origin && !/^http:\/\/127\.0\.0\.1:\d+$/.test(event.origin)) || event.data?.source !== 'lumen-app') return;
   if (parentOrigin && parentOrigin !== event.origin) return;
   parentOrigin = event.origin;
   if (event.data.type === 'hello') { notify('connected', ready); return; }

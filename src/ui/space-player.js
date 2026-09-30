@@ -4,7 +4,7 @@ let player, parentOrigin, ready = false;
 function notify(type) { if (parentOrigin) parent.postMessage({ source: 'lumen-space', type }, parentOrigin); }
 function playMuted() { player.mute(); player.setVolume(0); player.playVideo(); }
 window.addEventListener('message', event => {
-  if (event.source !== parent || !/^http:\/\/127\.0\.0\.1:\d+$/.test(event.origin) || event.data?.source !== 'lumen-space-host' || event.data.type !== 'hello') return;
+  if (event.source !== parent || (event.origin !== location.origin && !/^http:\/\/127\.0\.0\.1:\d+$/.test(event.origin)) || event.data?.source !== 'lumen-space-host' || event.data.type !== 'hello') return;
   if (parentOrigin && parentOrigin !== event.origin) return;
   parentOrigin = event.origin;
   if (ready) playMuted();

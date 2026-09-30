@@ -343,6 +343,16 @@
   });
   async function init() {
     const data = await api.init();
+    document.body.dataset.platform = data.platform;
+    if (data.platform === 'web') {
+      $('.window-actions').hidden = true;
+      $('#keep-playing').closest('.setting-row').hidden = true;
+      $('.setting-transparency').hidden = true;
+      $('#reset-opacity').hidden = true;
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        $('.visualizer-settings').hidden = true;
+      }
+    }
     library = data.library; settings = data.settings; playerOrigin = data.playerOrigin;
     history = data.history || []; renderHistory();
     minimized = data.minimized;

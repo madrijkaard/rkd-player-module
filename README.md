@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Your videos. Your atmosphere.</strong><br>
-  A desktop YouTube player with a local library, channel recommendations, dark themes, and audio-reactive visuals.
+  A desktop and browser YouTube player with a local library, channel recommendations, dark themes, and audio-reactive visuals.
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 The player opens in a spacious Cinema layout. A modal library keeps your YouTube channels organized. Selecting a channel loads its public videos into the horizontal thumbnail carousel without starting playback. Choose a carousel thumbnail when you are ready to watch. Four dark themes and four audio visualizers let you personalize the interface without restarting playback.
 
-Built with Electron, vanilla JavaScript, HTML, and CSS. The desktop interface currently uses the **Lúmen** name and Portuguese labels.
+Built with Electron, Node.js, vanilla JavaScript, HTML, and CSS. Both interfaces use the **Lúmen** name and Portuguese labels.
 
 ## 📚 Table of contents
 
@@ -33,6 +33,7 @@ Built with Electron, vanilla JavaScript, HTML, and CSS. The desktop interface cu
 - [Theme gallery](#-theme-gallery)
 - [Project structure](#-project-structure)
 - [Getting started](#-getting-started)
+- [Web version and Container Core](#-web-version-and-container-core)
 - [Player controls](#-player-controls)
 - [Settings and storage](#-settings-and-storage)
 - [Development and tests](#-development-and-tests)
@@ -164,7 +165,8 @@ rkd-player-module/
 │   ├── test-radar.cjs           # Live aircraft positions and background lifecycle
 │   ├── test-youtube.cjs         # Live playback and minimize behavior
 │   ├── test-recommendations.cjs # Channel suggestions and carousel
-│   └── test-visualizer.cjs      # Live audio capture and visualizer lifecycle
+│   ├── test-visualizer.cjs      # Live audio capture and visualizer lifecycle
+│   └── test-web.cjs             # Browser integration check
 ├── src/
 │   ├── main.cjs                 # Native window and validated IPC handlers
 │   ├── preload.cjs              # Restricted renderer bridge
@@ -175,8 +177,10 @@ rkd-player-module/
 │   ├── recommendations.cjs      # Channel lookup, parsing, and cache
 │   ├── recommendation-catalog.cjs # Older uploads, pagination, and random selection
 │   ├── server.cjs               # Isolated local interface/player origins
+│   ├── web-server.cjs           # Browser HTTP server and API
 │   └── ui/
 │       ├── index.html           # Desktop interface and modals
+│       ├── web-bridge.js        # Browser counterpart of the Electron preload
 │       ├── app.js               # Library, settings, and player coordination
 │       ├── style.css            # Layout and original theme
 │       ├── themes.css           # Cyberpunk, Radar, and Estação Espacial themes
@@ -190,20 +194,22 @@ rkd-player-module/
 │   ├── history.test.cjs
 │   ├── recommendations.test.cjs
 │   ├── recommendation-catalog.test.cjs
-│   └── migration.test.cjs
+│   ├── migration.test.cjs
+│   └── web-server.test.cjs
+├── Dockerfile.web               # Node-only container image
 ├── .gitignore
 ├── package.json
 ├── package-lock.json
 └── README.md
 ```
 
-The Electron renderer runs with **context isolation**, **sandboxing**, and **Node.js integration disabled**. The YouTube wrapper uses a separate loopback origin without the Electron bridge. Local servers bind to `127.0.0.1` on available ports; they are internal application components, not a public REST API.
+The Electron renderer runs with **context isolation**, **sandboxing**, and **Node.js integration disabled**. The YouTube wrapper uses a separate loopback origin without the Electron bridge. Electron's local servers bind to `127.0.0.1` on available ports. The web version below uses its own HTTP server and browser bridge.
 
 ## 🧭 Getting started
 
 ### Prerequisites
 
-- Windows 10 or 11; other platforms have not been validated.
+- Windows 10 or 11 for Electron; the browser version also runs on other systems with Node.js.
 - Node.js **22.12.0 or newer**, with npm. Node.js 24 is a suitable choice.
 - Internet access to install dependencies and load YouTube videos, metadata, and thumbnails.
 
@@ -226,6 +232,30 @@ npm.cmd start
 ```
 
 The repository currently provides a source-based launch workflow. There is no installer or executable packaging script.
+
+## 🌐 Web version and Container Core
+
+The browser version uses the same player, channel library, history, themes, recommendations, and server-side metadata code. The original Electron application remains available with `npm start`.
+
+### Run locally
+
+Node.js 22.12 or newer is required. The web runtime has no npm dependencies, so `npm ci` is optional if you only use the browser version.
+
+```powershell
+npm.cmd run start:web
+```
+
+Open `http://localhost:3000`. To change the port, set `$env:PORT = '3001'` before starting. The default bind address is `127.0.0.1`; the default data directory is `data/`. The library and history are stored server-side in `data/library.json`.
+
+### Run in Container Core
+
+Publish these source changes to the repository branch before building in Container Core, because it clones the remote repository as the build context. In Container Core, create a project pointing to `https://github.com/madrijkaard/rkd-player-module`. For the image definition, use the contents of [`Dockerfile.web`](Dockerfile.web). This Dockerfile installs only the Node web runtime; it does not download Electron. Create a setup with an available host port mapped to container port `3000`, for example `8082:3000`. Create one instance and open `http://localhost:8082`.
+
+Use the setup's volume field to persist `/data`, for example `lumen_player_data:/data`. The web library is stored there as `/data/library.json`. Keep a single container for the same data volume because the JSON store is designed for one writer.
+
+`/health` returns a basic readiness response. `PORT` and `LUMEN_HOST` control the listener; the Dockerfile sets `PORT=3000` and `LUMEN_HOST=0.0.0.0`. The server accepts `localhost` and `127.0.0.1` as HTTP Host names by default. Set `LUMEN_ALLOWED_HOSTS` to a comma-separated list when using another hostname; include the defaults in that list if they should still work. The web API has no user login, so keep the published port restricted to trusted users and networks.
+
+Browser playback follows YouTube's embed and autoplay rules. Native Electron window controls and transparency are hidden on the web. The audio visualizer needs a browser that supports tab audio capture and requires you to explicitly share the tab with audio. Geolocation for the Radar theme requires browser permission and a secure context (`localhost` or HTTPS). YouTube and OpenSky availability still depend on their services.
 
 ## 🎛 Player controls
 
@@ -300,6 +330,7 @@ The example stores data under the ignored `work/` directory. For other custom lo
 | Command | Coverage |
 | --- | --- |
 | `npm test` | URL validation, settings, storage migration, recommendation parsing, cache, and fallbacks |
+| `npm run test:web` | Browser integration with Edge: library, settings, player bridge, and history |
 | `npm run test:app` | Channel registration, library operations, themes, transparency, and persistence |
 | `npm run test:channels` | Deterministic checks for channel switching, no autoplay, stale responses, errors, empty channels, and duplicates |
 | `npm run test:history` | Playback-only recording, live modal updates, metadata, deduplication, restart persistence, and the 100-video limit |
@@ -314,6 +345,12 @@ Run the unit tests:
 
 ```bash
 npm test
+```
+
+Run the browser integration check on a machine with Microsoft Edge and the development dependencies installed:
+
+```bash
+npm run test:web
 ```
 
 Run the Electron checks individually:
